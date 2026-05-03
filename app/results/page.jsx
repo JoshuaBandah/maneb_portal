@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import styles from './styles/results.module.css';
 
 export default function ExamResults() {
@@ -9,6 +9,15 @@ export default function ExamResults() {
     const [results, setResults] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [queueInfo, setQueueInfo] = useState(null);
+
+    const abortRef = useRef(false);
+
+    useEffect(() => {
+        return () => {
+            abortRef.current = true;
+        };
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -16,6 +25,8 @@ export default function ExamResults() {
         setLoading(true);
         setError('');
         setResults(null);
+        setQueueInfo(null);
+        abortRef.current = false;
 
         try {
             const url = new URL(
@@ -33,16 +44,73 @@ export default function ExamResults() {
                 return;
             }
 
-            if (data.success) {
-                setResults(data.data);
-            } else {
-                setError('No results found');
+            console.log(response)
+            if (response.status === 202 && data?.data?.jobId) {
+                const { jobId, position, estimatedWaitTime } = data.data;
+
+                setQueueInfo({
+                    jobId,
+                    position,
+                    estimatedWaitTime,
+                    progress: 0,
+                });
+
+                await pollJob(jobId);
+                return;
             }
+
+            setError('Unexpected response from server');
         } catch (err) {
             setError('Something went wrong');
         } finally {
             setLoading(false);
         }
+    };
+
+    const pollJob = async (jobId) => {
+        let attempts = 0;
+
+        while (attempts < 30) {
+            if (abortRef.current) return;
+
+            try {
+                const res = await fetch(
+                    `http://localhost:3000/grades/queue/status/${jobId}`
+                );
+
+                const data = await res.json();
+
+                if (abortRef.current) return;
+
+                // update progress if available
+                if (data.progress !== undefined) {
+                    setQueueInfo((prev) => ({
+                        ...prev,
+                        progress: data.progress,
+                    }));
+                }
+
+                if (data.status === 'completed') {
+                    setResults(data.result?.data || null);
+                    setQueueInfo(null);
+                    return;
+                }
+
+                if (data.status === 'failed') {
+                    setError('Processing failed');
+                    setQueueInfo(null);
+                    return;
+                }
+
+                await new Promise((r) => setTimeout(r, 2000));
+                attempts++;
+            } catch (err) {
+                setError('Error checking status');
+                return;
+            }
+        }
+
+        setError('Took too long. Try again.');
     };
 
     if (results) {
@@ -114,6 +182,18 @@ export default function ExamResults() {
                     </button>
                 </form>
 
+                {queueInfo && (
+                    <div className={styles.info}>
+                        <p>Your request is in queue</p>
+                        <p>Position: {queueInfo.position}</p>
+                        <p>
+                            Estimated wait:{' '}
+                            {queueInfo.estimatedWaitTime}s
+                        </p>
+                        <p>Progress: {queueInfo.progress ?? 0}%</p>
+                    </div>
+                )}
+
                 {error && (
                     <div className={styles.error}>{error}</div>
                 )}
@@ -140,6 +220,7 @@ function ResultsDisplay({ results, onBack }) {
         <div className={styles.resultsContainer}>
             <button onClick={onBack} className={styles.backButton}>Back to Search</button>
 
+            {/* Student Information */}
             <div className={styles.studentInfo}>
                 <h2>Candidate Information</h2>
                 <div className={styles.infoGrid}>
@@ -150,6 +231,9 @@ function ResultsDisplay({ results, onBack }) {
                 </div>
             </div>
 
+
+
+            {/* Results Table */}
             <div className={styles.resultsTable}>
                 <h2>Examination Results</h2>
                 <table>
@@ -182,6 +266,8 @@ function ResultsDisplay({ results, onBack }) {
                     </tbody>
                 </table>
             </div>
+
+
         </div>
     );
 }
