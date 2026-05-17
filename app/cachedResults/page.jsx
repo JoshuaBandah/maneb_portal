@@ -100,7 +100,7 @@ export default function ExamResults() {
 
 // Results Display Component
 function ResultsDisplay({ results, onBack }) {
-    // Define subjects and their grading scales - expanded to cover all MSCE subjects
+    // Define all MSCE subjects with grade calculation
     const subjects = [
         { name: 'Accounting', key: 'accounting', grade: getGrade(results.accounting) },
         { name: 'Agriculture', key: 'agriculture', grade: getGrade(results.agriculture) },
