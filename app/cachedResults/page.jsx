@@ -121,12 +121,11 @@ function ResultsDisplay({ results, onBack }) {
     ];
 
     // Calculate statistics
+    const validSubjects = subjects.filter(s => results[s.key] > 0);
+    const totalScore = validSubjects.reduce((sum, s) => sum + (parseInt(results[s.key]) || 0), 0);
+    const averageScore = validSubjects.length > 0 ? (totalScore / validSubjects.length).toFixed(1) : 0;
     const passedSubjects = subjects.filter(s => parseInt(results[s.key]) >= 50);
     const failedSubjects = subjects.filter(s => parseInt(results[s.key]) < 50 && parseInt(results[s.key]) > 0);
-    const notAttempted = subjects.filter(s => results[s.key] === '0' || results[s.key] === null);
-
-    const totalScore = subjects.reduce((sum, s) => sum + (parseInt(results[s.key]) || 0), 0);
-    const averageScore = (totalScore / subjects.filter(s => results[s.key] > 0).length).toFixed(1);
 
     return (
         <div className={styles.resultsContainer}>
